@@ -12,8 +12,11 @@ Estrutura do Repositório
 O repositório é organizado da seguinte forma:
 
 /aulas: Contém os códigos desenvolvidos em aula, divididos por tópicos, para facilitar o aprendizado progressivo.
+
 /exercicios: Exemplos e exercícios práticos para solidificar o aprendizado.
+
 /projetos: Projetos finais e trabalhos práticos, onde os alunos podem aplicar os conceitos aprendidos de forma mais abrangente.
+
 Como Usar
 Instalação
 Clone este repositório para a sua máquina local:
