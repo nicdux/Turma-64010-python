@@ -1,12 +1,17 @@
 import pandas as pd
 import sqlite3
 
+def cria_conn(tipo_de_conn,nome_db ):
+    if tipo_de_conn =="sqlite3":
+         conn = sqlite3.connect(nome_db)
+         return conn
+
 
 def salva_no_bd(df,nome_tabela,nome_db):
     ''''Essa função é utilizada pra criar uma nova tabela
       no banco de dados escolhido'''
     
-    conn = sqlite3.connect(nome_db)
+    conn = cria_conn('sqlite3',nome_db)
     df.to_sql(nome_tabela,conn,if_exists='replace',index=False)
     conn.close()
     return True
