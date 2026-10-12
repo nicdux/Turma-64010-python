@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #101211;
+  --color-panel: #171a18;
+  --color-line: #282d2a;
+  --color-muted: #858d88;
+  --color-accent: #b5f36d;
+  --font-sans: Arial, Helvetica, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+  --background: #101211;
+  --surface: #171a18;
+  --stroke: #282d2a;
+  --text: #f1f3f1;
+  --muted: #858d88;
+  --accent: #b5f36d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: #b5f36d;
+  color: #101211;
+}
+
+.chart-grid {
+  background-image: linear-gradient(to bottom, transparent 95%, #292e2b 96%);
+  background-size: 100% 25%;
+}
