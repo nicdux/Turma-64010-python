@@ -12,6 +12,8 @@ obj/
 !.env.example
 *.user
 *.suo
+*.db
+*.db-*
 .terraform/
 *.tfstate
 *.tfstate.*

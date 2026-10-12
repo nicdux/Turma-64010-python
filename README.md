@@ -52,8 +52,8 @@ Production tenant identity is obtained from the validated token's `tenant_id` cl
 
 ## Azure deployment
 
-The Bicep entry point is `infrastructure/bicep/main.bicep`. It provisions a baseline web/API, SQL, storage, Key Vault, and monitoring footprint. Advanced paid services are explicitly gated and off by default. Review `docs/architecture.md` and the deployment runbook, obtain subscription/cost approval, and authenticate Azure CLI before deployment. The GitHub deployment workflow is manual and requires a configured Azure federated credential; it does not deploy on every push.
+The Bicep entry point is `infrastructure/bicep/main.bicep`. It provisions a baseline API, SQL, storage, Key Vault, monitoring, VNet integration and private endpoints. Advanced paid services are explicitly gated and off by default. The supplied Entra directory is documented in `docs/deployment-prerequisites.md`. Review that checklist, obtain subscription/cost approval, and configure GitHub OIDC before deployment. The GitHub infrastructure workflow is manual and does not deploy on every push.
 
 ## Roadmap and known gaps
 
-The first milestone is a secure, persistent vertical slice for customers, barbers, services, and appointments. Before production: implement schema and migrations, database RLS, complete Entra/External ID flows, authorization and audit trails, operational alerting, backups, accessibility and load/security tests, and third-party integrations. See `docs/architecture.md`.
+The API currently persists customers, barbers, services, and appointments locally/through Azure SQL, scopes queries to the validated token tenant claim, and applies SQL session context for RLS. Before production: provision and test the SQL schema/RLS, grant the managed identity database access, complete Entra/External ID flows and SaaS tenant provisioning, connect the frontend, add authorization roles and audit trails, operational alerting, backups, accessibility/load/security tests, and third-party integrations. See `docs/architecture.md`.

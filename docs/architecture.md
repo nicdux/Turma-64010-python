@@ -2,7 +2,7 @@
 
 ## Current delivery boundary
 
-This repository is a starter, not a production SaaS. The frontend dashboard and API summary use illustrative data. The API validates Entra-issued JWTs and requires a UUID `tenant_id` claim, but the claim issuer/app registration has not been configured and persistence is not wired. The SQL script is a proposed schema/RLS baseline, not an applied migration. No external services or Azure resources are deployed.
+This repository is a starter, not a production SaaS. The frontend dashboard still uses illustrative data. The API validates Entra-issued JWTs and requires a UUID `tenant_id` claim. Customers, barbers, services, and appointments persist through EF Core; local Development uses SQLite, while Production is configured for Azure SQL and managed identity. Tenant query filters and SQL `SESSION_CONTEXT` are wired, but SQL schema/RLS has not been applied, the App Service identity has not been granted database access, and the trusted claim issuer/app registration has not been configured. No Azure resources are deployed.
 
 ## Target architecture
 
@@ -42,7 +42,7 @@ The initial deployment targets shared Azure SQL with a `tenant_id` column, tenan
 | --- | --- |
 | Web | Next.js App Router and TypeScript; dashboard is dark-only |
 | API | ASP.NET Core 9 starter; JWT bearer authentication, health endpoint, per-process fixed-window rate limiter |
-| Persistence | Azure SQL target; SQL DDL/RLS is a proposal and API persistence is not connected |
+| Persistence | EF Core with SQLite for local Development and Azure SQL for Production; SQL DDL/RLS bootstrap is manual |
 | Secrets | Managed identity and Key Vault RBAC; no credentials belong in source or workflow parameters |
 | Infrastructure | Bicep resource-group template; private data-plane access is the target |
 | Telemetry | Application Insights workspace-based component and Log Analytics |
@@ -50,6 +50,8 @@ The initial deployment targets shared Azure SQL with a `tenant_id` column, tenan
 | Messaging | Advanced resources are gated and off by default pending configuration, cost and consent review |
 | Analytics | Power BI Embedded capacity is gated because it has material ongoing cost; no report/model is included |
 
+The initial tenant's Entra directory is `Diretório Padrão` (`suportenicolashotmail.onmicrosoft.com`, ID `094b4847-83d3-42be-b67d-c18dd6c0e29d`). This identifies the authentication directory only; the SaaS tenant key and SQL administrator group are separate identities. See `docs/deployment-prerequisites.md`.
+
 ## Production readiness gaps
 
-Before onboarding Barbearia Avelino or storing personal data: complete the identity app and trusted tenant claim mapping; implement migrations, persistence, SQL RLS connection initialization, repository/use-case boundaries, RBAC, audit retention, consent and LGPD workflows; add private endpoints, VNet integration and private DNS; replace Bicep placeholders; set backups, restore tests, alerts and service objectives; threat-model and pentest; implement complete customer, service, barber, appointment, payments, campaign and AI workflows; review retention and data residency with the controller; and test accessibility, failover, load, cost limits, and tenant isolation.
+Before onboarding Barbearia Avelino or storing personal data: complete the identity app and trusted tenant claim mapping; run the SQL schema/RLS and managed-identity bootstrap scripts; implement versioned migrations, repository/use-case boundaries, RBAC, audit retention, consent and LGPD workflows; verify private endpoint/VNet connectivity; replace the API audience and SQL admin group inputs; set backups, restore tests, alerts and service objectives; threat-model and pentest; connect the frontend to the API; implement payments, campaigns and AI workflows; review retention and data residency with the controller; and test accessibility, failover, load, cost limits, and tenant isolation.

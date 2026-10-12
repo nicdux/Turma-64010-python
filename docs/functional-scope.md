@@ -2,9 +2,9 @@
 
 ## Current prototype
 
-The dashboard demonstrates a dark-only barbershop overview: headline business metrics, revenue chart with area/bar switching, service mix donut, today's appointment list, team performance, and a CEO Copilot insight card. All values are illustrative and the controls are not wired to business workflows.
+The dashboard demonstrates a dark-only barbershop overview: headline business metrics, revenue chart with area/bar switching, service mix donut, today's appointment list, team performance, and a CEO Copilot insight card. All visible dashboard values are illustrative and the controls are not yet connected to the API.
 
-The API currently exposes a health endpoint and an authenticated demo dashboard summary. It does not read or modify customer records.
+The API exposes a public liveness endpoint and authenticated tenant-scoped operations for dashboard summary, customer create/list, barber create/list, service create/list, and appointment create/list. It persists the first vertical slice, validates appointment duration and barber overlap, scopes EF queries to a validated `tenant_id` claim, initializes SQL Server RLS session context, and writes transactional audit events without customer PII. Production still requires applying the SQL bootstrap, SQL identity permissions, a trusted claim mapping, and the external Azure setup.
 
 ## First production vertical slice
 

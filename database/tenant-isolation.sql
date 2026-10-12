@@ -66,8 +66,25 @@ CREATE TABLE core.Appointments (
 );
 GO
 
-CREATE INDEX IX_Appointments_tenant_starts_at ON core.Appointments (tenant_id, starts_at);
+CREATE INDEX IX_Appointments_tenant_barber_starts_at ON core.Appointments (tenant_id, barber_id, starts_at);
 CREATE INDEX IX_Customers_tenant_phone ON core.Customers (tenant_id, phone_e164);
+GO
+
+CREATE TABLE core.AuditEvents (
+    tenant_id UNIQUEIDENTIFIER NOT NULL,
+    audit_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_AuditEvents_id DEFAULT NEWSEQUENTIALID(),
+    actor_id NVARCHAR(128) NOT NULL,
+    action NVARCHAR(16) NOT NULL,
+    entity_type NVARCHAR(64) NOT NULL,
+    entity_id NVARCHAR(128) NOT NULL,
+    occurred_at DATETIME2(3) NOT NULL CONSTRAINT DF_AuditEvents_occurred_at DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT PK_AuditEvents PRIMARY KEY (tenant_id, audit_id),
+    CONSTRAINT FK_AuditEvents_Tenants FOREIGN KEY (tenant_id) REFERENCES core.Tenants (tenant_id),
+    CONSTRAINT CK_AuditEvents_action CHECK (action IN ('create', 'update', 'delete'))
+);
+GO
+
+CREATE INDEX IX_AuditEvents_tenant_occurred_at ON core.AuditEvents (tenant_id, occurred_at);
 GO
 
 CREATE FUNCTION security.fn_tenantAccessPredicate(@tenant_id UNIQUEIDENTIFIER)
@@ -93,6 +110,9 @@ CREATE SECURITY POLICY security.TenantIsolationPolicy
     ADD BLOCK PREDICATE security.fn_tenantAccessPredicate(tenant_id) ON core.Services AFTER UPDATE,
     ADD FILTER PREDICATE security.fn_tenantAccessPredicate(tenant_id) ON core.Appointments,
     ADD BLOCK PREDICATE security.fn_tenantAccessPredicate(tenant_id) ON core.Appointments AFTER INSERT,
-    ADD BLOCK PREDICATE security.fn_tenantAccessPredicate(tenant_id) ON core.Appointments AFTER UPDATE
+    ADD BLOCK PREDICATE security.fn_tenantAccessPredicate(tenant_id) ON core.Appointments AFTER UPDATE,
+    ADD FILTER PREDICATE security.fn_tenantAccessPredicate(tenant_id) ON core.AuditEvents,
+    ADD BLOCK PREDICATE security.fn_tenantAccessPredicate(tenant_id) ON core.AuditEvents AFTER INSERT,
+    ADD BLOCK PREDICATE security.fn_tenantAccessPredicate(tenant_id) ON core.AuditEvents AFTER UPDATE
 WITH (STATE = ON, SCHEMABINDING = ON);
 GO

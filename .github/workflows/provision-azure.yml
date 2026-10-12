@@ -29,6 +29,7 @@ on:
         description: Entra tenant ID
         required: true
         type: string
+        default: 094b4847-83d3-42be-b67d-c18dd6c0e29d
       api_audience:
         description: API application ID URI
         required: true
@@ -55,33 +56,46 @@ jobs:
           tenant-id: ${{ inputs.entra_tenant_id }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - uses: azure/cli@v2
+        env:
+          RESOURCE_GROUP: ${{ inputs.resource_group }}
+          LOCATION: ${{ inputs.location }}
+          DEPLOYMENT_ENVIRONMENT: ${{ inputs.environment }}
         with:
           inlineScript: |
             az group create \
-              --name "${{ inputs.resource_group }}" \
-              --location "${{ inputs.location }}" \
-              --tags application=BARBERCLOUD environment="${{ inputs.environment }}" managedBy=Bicep
+              --name "$RESOURCE_GROUP" \
+              --location "$LOCATION" \
+              --tags application=BARBERCLOUD environment="$DEPLOYMENT_ENVIRONMENT" managedBy=Bicep
       - uses: azure/cli@v2
+        env:
+          RESOURCE_GROUP: ${{ inputs.resource_group }}
+          LOCATION: ${{ inputs.location }}
+          DEPLOYMENT_ENVIRONMENT: ${{ inputs.environment }}
+          SQL_ADMIN_OBJECT_ID: ${{ inputs.sql_admin_object_id }}
+          SQL_ADMIN_NAME: ${{ inputs.sql_admin_name }}
+          ENTRA_TENANT_ID: ${{ inputs.entra_tenant_id }}
+          API_AUDIENCE: ${{ inputs.api_audience }}
+          ADVANCED_SERVICES: ${{ inputs.advanced_services }}
         with:
           inlineScript: |
             az deployment group what-if \
-              --resource-group "${{ inputs.resource_group }}" \
+              --resource-group "$RESOURCE_GROUP" \
               --template-file infrastructure/bicep/main.bicep \
-              --parameters environment="${{ inputs.environment }}" \
-                location="${{ inputs.location }}" \
-                sqlEntraAdminObjectId="${{ inputs.sql_admin_object_id }}" \
-                sqlEntraAdminName="${{ inputs.sql_admin_name }}" \
-                entraTenantId="${{ inputs.entra_tenant_id }}" \
-                apiAudience="${{ inputs.api_audience }}" \
-                advancedServices="${{ inputs.advanced_services }}"
+              --parameters deploymentEnvironment="$DEPLOYMENT_ENVIRONMENT" \
+                location="$LOCATION" \
+                sqlEntraAdminObjectId="$SQL_ADMIN_OBJECT_ID" \
+                sqlEntraAdminName="$SQL_ADMIN_NAME" \
+                entraTenantId="$ENTRA_TENANT_ID" \
+                apiAudience="$API_AUDIENCE" \
+                advancedServices="$ADVANCED_SERVICES"
             az deployment group create \
-              --name "barbercloud-${{ inputs.environment }}-${{ github.run_number }}" \
-              --resource-group "${{ inputs.resource_group }}" \
+              --name "barbercloud-${DEPLOYMENT_ENVIRONMENT}-${{ github.run_number }}" \
+              --resource-group "$RESOURCE_GROUP" \
               --template-file infrastructure/bicep/main.bicep \
-              --parameters environment="${{ inputs.environment }}" \
-                location="${{ inputs.location }}" \
-                sqlEntraAdminObjectId="${{ inputs.sql_admin_object_id }}" \
-                sqlEntraAdminName="${{ inputs.sql_admin_name }}" \
-                entraTenantId="${{ inputs.entra_tenant_id }}" \
-                apiAudience="${{ inputs.api_audience }}" \
-                advancedServices="${{ inputs.advanced_services }}"
+              --parameters deploymentEnvironment="$DEPLOYMENT_ENVIRONMENT" \
+                location="$LOCATION" \
+                sqlEntraAdminObjectId="$SQL_ADMIN_OBJECT_ID" \
+                sqlEntraAdminName="$SQL_ADMIN_NAME" \
+                entraTenantId="$ENTRA_TENANT_ID" \
+                apiAudience="$API_AUDIENCE" \
+                advancedServices="$ADVANCED_SERVICES"

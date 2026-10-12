@@ -10,21 +10,22 @@ param namePrefix string = 'barber'
   'staging'
   'prod'
 ])
-param environment string = 'dev'
+param deploymentEnvironment string = 'dev'
 
 param location string = resourceGroup().location
+param appServiceDomain string = 'azurewebsites.net'
 param sqlEntraAdminObjectId string
 param sqlEntraAdminName string
-param entraTenantId string
+param entraTenantId string = '094b4847-83d3-42be-b67d-c18dd6c0e29d'
 param apiAudience string
 param advancedServices bool = false
 
 var suffix = uniqueString(subscription().id, resourceGroup().id)
-var appName = '${namePrefix}-${environment}-${suffix}'
+var appName = '${namePrefix}-${deploymentEnvironment}-${suffix}'
 var keyVaultName = 'bc${suffix}'
 var tags = {
   application: 'BARBERCLOUD'
-  environment: environment
+  environment: deploymentEnvironment
   managedBy: 'Bicep'
   dataClassification: 'Confidential'
 }
@@ -53,14 +54,116 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   }
 }
 
+resource network 'Microsoft.Network/virtualNetworks@2024-05-01' = {
+  name: '${appName}-vnet'
+  location: location
+  tags: tags
+  properties: {
+    addressSpace: {
+      addressPrefixes: [
+        '10.24.0.0/16'
+      ]
+    }
+    subnets: [
+      {
+        name: 'appservice-integration'
+        properties: {
+          addressPrefix: '10.24.1.0/24'
+          delegations: [
+            {
+              name: 'app-service'
+              properties: {
+                serviceName: 'Microsoft.Web/serverFarms'
+              }
+            }
+          ]
+        }
+      }
+      {
+        name: 'private-endpoints'
+        properties: {
+          addressPrefix: '10.24.2.0/24'
+          privateEndpointNetworkPolicies: 'Disabled'
+        }
+      }
+    ]
+  }
+}
+
+resource appSubnet 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' existing = {
+  parent: network
+  name: 'appservice-integration'
+}
+
+resource privateEndpointSubnet 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' existing = {
+  parent: network
+  name: 'private-endpoints'
+}
+
+resource sqlPrivateDns 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  #disable-next-line no-hardcoded-env-urls
+  name: 'privatelink.database.windows.net'
+  location: 'global'
+  tags: tags
+}
+
+resource vaultPrivateDns 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  name: 'privatelink.vaultcore.azure.net'
+  location: 'global'
+  tags: tags
+}
+
+resource blobPrivateDns 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  #disable-next-line no-hardcoded-env-urls
+  name: 'privatelink.blob.core.windows.net'
+  location: 'global'
+  tags: tags
+}
+
+resource sqlDnsLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  parent: sqlPrivateDns
+  name: '${appName}-vnet-link'
+  location: 'global'
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: network.id
+    }
+  }
+}
+
+resource vaultDnsLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  parent: vaultPrivateDns
+  name: '${appName}-vnet-link'
+  location: 'global'
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: network.id
+    }
+  }
+}
+
+resource blobDnsLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  parent: blobPrivateDns
+  name: '${appName}-vnet-link'
+  location: 'global'
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: network.id
+    }
+  }
+}
+
 resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: '${appName}-plan'
   location: location
   kind: 'linux'
   tags: tags
   sku: {
-    name: environment == 'prod' ? 'P1v3' : 'B1'
-    tier: environment == 'prod' ? 'PremiumV3' : 'Basic'
+    name: deploymentEnvironment == 'prod' ? 'P1v3' : 'B1'
+    tier: deploymentEnvironment == 'prod' ? 'PremiumV3' : 'Basic'
   }
   properties: {
     reserved: true
@@ -77,13 +180,15 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
   }
   properties: {
     serverFarmId: appServicePlan.id
+    virtualNetworkSubnetId: appSubnet.id
     httpsOnly: true
     siteConfig: {
       linuxFxVersion: 'DOTNETCORE|9.0'
       minTlsVersion: '1.2'
       ftpsState: 'Disabled'
       http20Enabled: true
-      alwaysOn: environment == 'prod'
+      vnetRouteAllEnabled: true
+      alwaysOn: deploymentEnvironment == 'prod'
       appSettings: [
         {
           name: 'ASPNETCORE_ENVIRONMENT'
@@ -100,6 +205,64 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
         {
           name: 'Entra__Audience'
           value: apiAudience
+        }
+        {
+          name: 'Database__Provider'
+          value: 'SqlServer'
+        }
+        {
+          name: 'ConnectionStrings__BarberCloud'
+          value: 'Server=tcp:${appName}-sql.${environment().suffixes.sqlServerHostname},1433;Database=${appName}-db;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+        }
+        {
+          name: 'Cors__AllowedOrigins__0'
+          value: 'https://${appName}-frontend.${appServiceDomain}'
+        }
+      ]
+    }
+  }
+}
+
+resource frontendWebApp 'Microsoft.Web/sites@2023-12-01' = {
+  name: '${appName}-frontend'
+  location: location
+  kind: 'app,linux'
+  tags: tags
+  properties: {
+    serverFarmId: appServicePlan.id
+    virtualNetworkSubnetId: appSubnet.id
+    httpsOnly: true
+    siteConfig: {
+      linuxFxVersion: 'NODE|20-lts'
+      minTlsVersion: '1.2'
+      ftpsState: 'Disabled'
+      http20Enabled: true
+      vnetRouteAllEnabled: true
+      appCommandLine: 'node server.js'
+      appSettings: [
+        {
+          name: 'NODE_ENV'
+          value: 'production'
+        }
+        {
+          name: 'PORT'
+          value: '8080'
+        }
+        {
+          name: 'WEBSITES_PORT'
+          value: '8080'
+        }
+        {
+          name: 'HOSTNAME'
+          value: '0.0.0.0'
+        }
+        {
+          name: 'NEXT_TELEMETRY_DISABLED'
+          value: '1'
+        }
+        {
+          name: 'API_BASE_URL'
+          value: 'https://${appName}-api.${appServiceDomain}'
         }
       ]
     }
@@ -136,7 +299,7 @@ resource sqlDatabase 'Microsoft.Sql/servers/databases@2023-08-01-preview' = {
   name: '${appName}-db'
   location: location
   tags: tags
-  sku: environment == 'prod'
+  sku: deploymentEnvironment == 'prod'
     ? {
         name: 'GP_S_Gen5_2'
         tier: 'GeneralPurpose'
@@ -148,14 +311,50 @@ resource sqlDatabase 'Microsoft.Sql/servers/databases@2023-08-01-preview' = {
         tier: 'Basic'
       }
   properties: {
-    zoneRedundant: environment == 'prod'
-    minimalTlsVersion: '1.2'
+    zoneRedundant: deploymentEnvironment == 'prod'
     catalogCollation: 'SQL_Latin1_General_CP1_CI_AS'
   }
 }
 
+resource sqlPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' = {
+  name: '${appName}-sql-pe'
+  location: location
+  tags: tags
+  properties: {
+    subnet: {
+      id: privateEndpointSubnet.id
+    }
+    privateLinkServiceConnections: [
+      {
+        name: 'sql'
+        properties: {
+          privateLinkServiceId: sqlServer.id
+          groupIds: [
+            'sqlServer'
+          ]
+        }
+      }
+    ]
+  }
+}
+
+resource sqlPrivateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-05-01' = {
+  parent: sqlPrivateEndpoint
+  name: 'default'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'sql'
+        properties: {
+          privateDnsZoneId: sqlPrivateDns.id
+        }
+      }
+    ]
+  }
+}
+
 resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: take(toLower(replace('${appName}store', '-', '')), 24)
+  name: '${substring(namePrefix, 0, 3)}${suffix}'
   location: location
   tags: tags
   sku: {
@@ -172,6 +371,43 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
       defaultAction: 'Deny'
       bypass: 'AzureServices'
     }
+  }
+}
+
+resource storagePrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' = {
+  name: '${appName}-blob-pe'
+  location: location
+  tags: tags
+  properties: {
+    subnet: {
+      id: privateEndpointSubnet.id
+    }
+    privateLinkServiceConnections: [
+      {
+        name: 'blob'
+        properties: {
+          privateLinkServiceId: storage.id
+          groupIds: [
+            'blob'
+          ]
+        }
+      }
+    ]
+  }
+}
+
+resource storagePrivateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-05-01' = {
+  parent: storagePrivateEndpoint
+  name: 'default'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'blob'
+        properties: {
+          privateDnsZoneId: blobPrivateDns.id
+        }
+      }
+    ]
   }
 }
 
@@ -196,8 +432,45 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   }
 }
 
+resource vaultPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' = {
+  name: '${appName}-vault-pe'
+  location: location
+  tags: tags
+  properties: {
+    subnet: {
+      id: privateEndpointSubnet.id
+    }
+    privateLinkServiceConnections: [
+      {
+        name: 'vault'
+        properties: {
+          privateLinkServiceId: keyVault.id
+          groupIds: [
+            'vault'
+          ]
+        }
+      }
+    ]
+  }
+}
+
+resource vaultPrivateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-05-01' = {
+  parent: vaultPrivateEndpoint
+  name: 'default'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'vault'
+        properties: {
+          privateDnsZoneId: vaultPrivateDns.id
+        }
+      }
+    ]
+  }
+}
+
 resource appKeyVaultReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(keyVault.id, webApp.identity.principalId, 'KeyVaultSecretsUser')
+  name: guid(keyVault.id, webApp.name, 'KeyVaultSecretsUser')
   scope: keyVault
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
@@ -260,7 +533,6 @@ resource eventGridTopic 'Microsoft.EventGrid/topics@2022-06-15' = if (advancedSe
   properties: {
     inputSchema: 'CloudEventSchemaV1_0'
     publicNetworkAccess: 'Disabled'
-    minimumTlsVersionAllowed: '1.2'
   }
 }
 
@@ -308,6 +580,10 @@ resource powerBiCapacity 'Microsoft.PowerBIDedicated/capacities@2021-01-01' = if
 }
 
 output apiUrl string = 'https://${webApp.properties.defaultHostName}'
+output apiAppName string = webApp.name
+output frontendUrl string = 'https://${frontendWebApp.properties.defaultHostName}'
+output frontendAppName string = frontendWebApp.name
+output resourcePrefix string = appName
 output staticWebAppName string = staticWebApp.name
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 output databaseName string = sqlDatabase.name

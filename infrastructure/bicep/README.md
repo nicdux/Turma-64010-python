@@ -18,7 +18,7 @@ az group create --name rg-barbercloud-dev --location brazilsouth
 az deployment group what-if \
   --resource-group rg-barbercloud-dev \
   --template-file infrastructure/bicep/main.bicep \
-  --parameters environment=dev sqlEntraAdminObjectId="<group-object-id>" sqlEntraAdminName="<group-name>" entraTenantId="<entra-tenant-id>" apiAudience="<api-audience>"
+  --parameters deploymentEnvironment=dev sqlEntraAdminObjectId="<group-object-id>" sqlEntraAdminName="<group-name>" entraTenantId="<entra-tenant-id>" apiAudience="<api-audience>"
 ```
 
 Do not run the deployment until cost, subscription, identity, quota, and network prerequisites have been reviewed. Advanced services are disabled by default (`advancedServices=false`).
