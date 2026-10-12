@@ -42,6 +42,7 @@ jobs:
           npm run lint
           npm audit --audit-level=high
           npm run build
+          npx playwright install --with-deps chromium
           npm run test:e2e
           mkdir -p "$RUNNER_TEMP/frontend/.next"
           cp -a .next/standalone/. "$RUNNER_TEMP/frontend/"
